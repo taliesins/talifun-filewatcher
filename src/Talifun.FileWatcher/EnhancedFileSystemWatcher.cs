@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.ComponentModel;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Timers;
 
@@ -44,11 +45,13 @@ namespace Talifun.FileWatcher
             _fileSystemWatcherRenamedEvent = new RenamedEventHandler(OnFileRenamed);
             _fileFinishedChangingCallback = new FileFinishedChangingCallback(OnFileFinishedChanging);
 
-            _fileSystemWatcher = !string.IsNullOrEmpty(Filter) ? new FileSystemWatcher(FolderToWatch, Filter) : new FileSystemWatcher(FolderToWatch);
-            _fileSystemWatcher.IncludeSubdirectories = IncludeSubdirectories;
-            _fileSystemWatcher.EnableRaisingEvents = false;
-            _fileSystemWatcher.NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite;
-            _fileSystemWatcher.Changed += _fileSystemWatcherChangedEvent;
+    		_fileSystemWatcher = new FileSystemWatcher(FolderToWatch)
+    		{
+    		    IncludeSubdirectories = IncludeSubdirectories,
+    		    EnableRaisingEvents = false,
+    		    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite
+    		};
+    		_fileSystemWatcher.Changed += _fileSystemWatcherChangedEvent;
             _fileSystemWatcher.Created += _fileSystemWatcherCreatedEvent;
             _fileSystemWatcher.Deleted += _fileSystemWatcherDeletedEvent;
             _fileSystemWatcher.Renamed += _fileSystemWatcherRenamedEvent;
@@ -115,10 +118,12 @@ namespace Talifun.FileWatcher
             }
 
             string[] files = null;
-            files = !string.IsNullOrEmpty(Filter) ? Directory.GetFiles(folderPath, Filter) : Directory.GetFiles(folderPath);
+        	files = Directory.GetFiles(folderPath);
 
 			foreach (var file in files)
 			{
+				if (!ShouldMonitorFile(file)) continue;
+
 				var fileInfo = new FileInfo(file);
 				Push(file, new FileSystemEventArgs(WatcherChangeTypes.All, fileInfo.DirectoryName, fileInfo.Name));
 			}
@@ -146,7 +151,13 @@ namespace Talifun.FileWatcher
             return result;
         }
 
-        #region FilesChanging Queue
+		private bool ShouldMonitorFile(string fileName)
+		{
+			const RegexOptions regxOptions = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline;
+			return (string.IsNullOrEmpty(Filter) || Regex.IsMatch(fileName, Filter, regxOptions));
+		}
+
+    	#region FilesChanging Queue
 
         /// <summary>
         /// A file event has occured on a file already waiting to be raised, so update the time 
@@ -157,8 +168,11 @@ namespace Talifun.FileWatcher
         {
             if (string.IsNullOrEmpty(filePath)) return;
 
-            var item = _filesChanging[filePath];
-            item.FireTime = DateTime.Now.AddMilliseconds(PollTime);
+        	IFileChangingItem item;
+			if (_filesChanging.TryGetValue(filePath, out item))
+			{
+				item.FireTime = DateTime.Now.AddMilliseconds(PollTime);
+			}
 
             if (_nextFileToCheck == filePath)
             {
@@ -217,11 +231,10 @@ namespace Talifun.FileWatcher
             {
                 var dateTime = item.Value.FireTime;
 
-                if (currentDateTime < lowestDateTime)
-                {
-                    lowestDateTime = dateTime;
-                    nextFileToCheck = item.Key;
-                }
+            	if (currentDateTime >= lowestDateTime) continue;
+
+            	lowestDateTime = dateTime;
+            	nextFileToCheck = item.Key;
             }
 
             //There are no more files to raise events for
@@ -296,6 +309,7 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
+			if (!ShouldMonitorFile(filePath)) return;
             if (e.ChangeType != WatcherChangeTypes.Created) return;
             lock (_filesRaisingEventsLock)
             {
@@ -317,6 +331,8 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
+			if (!ShouldMonitorFile(filePath)) return;
+
             lock (_filesRaisingEventsLock)
             {
                 if (_filesChanging.ContainsKey(filePath))
@@ -336,6 +352,7 @@ namespace Talifun.FileWatcher
         private void OnFileDeleted(object sender, FileSystemEventArgs e)
         {
             var filePath = e.FullPath;
+			if (!ShouldMonitorFile(filePath)) return;
 
             lock (_filesRaisingEventsLock)
             {
@@ -355,6 +372,7 @@ namespace Talifun.FileWatcher
         private void OnFileRenamed(object sender, RenamedEventArgs e)
         {
             var filePath = e.FullPath;
+			if (!ShouldMonitorFile(filePath)) return;
 
             lock (_filesRaisingEventsLock)
             {
@@ -372,8 +390,6 @@ namespace Talifun.FileWatcher
         }
 
         #endregion
-
-        
 
         #region FileChangedEvent
         /// <summary>
