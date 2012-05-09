@@ -17,9 +17,9 @@ namespace Talifun.FileWatcher
         public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string filter, int pollTime, bool includeSubdirectories, object userState)
         {
             IEnhancedFileSystemWatcher folderMonitor = new EnhancedFileSystemWatcher(folderToWatch, filter, pollTime, includeSubdirectories)
-                                                           {
-                                                               UserState = userState
-                                                           };
+            {
+                UserState = userState
+            };
 
             return folderMonitor;
         }

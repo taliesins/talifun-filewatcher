@@ -8,7 +8,7 @@ using System.Timers;
 
 namespace Talifun.FileWatcher
 {
-    internal class EnhancedFileSystemWatcher : IEnhancedFileSystemWatcher
+    public class EnhancedFileSystemWatcher : IEnhancedFileSystemWatcher
     {
         private readonly TimeSpan _lockTimeout = TimeSpan.FromSeconds(10);
         private readonly AsyncOperation _asyncOperation = AsyncOperationManager.CreateOperation(null);
