@@ -42,6 +42,7 @@
     <Compile Include="..\GlobalAssemblyInfo.cs">
       <Link>Properties\GlobalAssemblyInfo.cs</Link>
     </Compile>
+    <Compile Include="Args\AllFilesFinishedChangingEventArgs.cs" />
     <Compile Include="Args\FileChangedEventArgs.cs" />
     <Compile Include="Args\FileCreatedEventArgs.cs" />
     <Compile Include="Args\FileDeletedEventArgs.cs" />
@@ -51,6 +52,7 @@
     <Compile Include="Factory\EnhancedFileSystemWatcherFactory.cs" />
     <Compile Include="Factory\IEnhancedFileSystemWatcherFactory.cs" />
     <Compile Include="FileChangingItem.cs" />
+    <Compile Include="Handler\AllFilesFinishedChangingEventHandler.cs" />
     <Compile Include="Handler\FileChangedEventHandler.cs" />
     <Compile Include="Handler\FileCreatedEventHandler.cs" />
     <Compile Include="Handler\FileDeletedEventHandler.cs" />
