@@ -89,5 +89,11 @@ namespace Talifun.FileWatcher
         /// If the file is renamed or deleted, this event will be called immediatly.
         /// </summary>
         event FileFinishedChangingEventHandler FileFinishedChangingEvent;
+
+        /// <summary>
+        /// This event is raised when a few changes to a multiple files have finished taking place. The polltime
+        /// specifies how long to wait without activity before assuming that file changes to all files are complete.
+        /// </summary>
+        event AllFilesFinishedChangingEventHandler AllFilesFinishedChangingEvent;
     }
 }

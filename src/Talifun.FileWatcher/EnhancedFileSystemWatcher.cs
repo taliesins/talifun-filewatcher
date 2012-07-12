@@ -127,7 +127,7 @@ namespace Talifun.FileWatcher
 				if (!ShouldMonitorFile(file)) continue;
 
 				var fileInfo = new FileInfo(file);
-				Push(file, new FileSystemEventArgs(WatcherChangeTypes.All, fileInfo.DirectoryName, fileInfo.Name));
+                Push(fileInfo.FullName, new FileSystemEventArgs(WatcherChangeTypes.All, fileInfo.DirectoryName, fileInfo.Name));
 			}
         }
 
