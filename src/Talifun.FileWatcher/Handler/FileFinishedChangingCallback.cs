@@ -1,6 +1,4 @@
-using System.IO;
-
 namespace Talifun.FileWatcher
 {
-    internal delegate void FileFinishedChangingCallback(FileSystemEventArgs e);
+    internal delegate void FileFinishedChangingCallback(FileFinishedChangingEventArgs e);
 }

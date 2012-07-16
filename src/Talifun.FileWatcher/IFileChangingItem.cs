@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 
 namespace Talifun.FileWatcher
 {
@@ -11,7 +10,9 @@ namespace Talifun.FileWatcher
             set;
         }
 
-        FileSystemEventArgs FileSystemEventArgs
+        string FilePath { get; }
+
+        FileEventType FileEventType
         {
             get;
         }

@@ -1,16 +1,17 @@
 using System;
-using System.IO;
 
 namespace Talifun.FileWatcher
 {
     internal class FileChangingItem : IFileChangingItem
     {
-        public FileChangingItem(FileSystemEventArgs fileSystemEventArgs)
+        public FileChangingItem(string filePath, FileEventType fileEventType)
         {
-            FileSystemEventArgs = fileSystemEventArgs;
+            FilePath = filePath;
+            FileEventType = fileEventType;
         }
 
-        public FileSystemEventArgs FileSystemEventArgs { get; private set; }
+        public string FilePath { get; private set; }
+        public FileEventType FileEventType { get; private set; }
         public DateTime FireTime { get; set; }
     }
 }

@@ -7,6 +7,7 @@ namespace FileWatcher.Demo
     public class Program
     {
         private const string WatcherFolder = "WatchedFolder";
+        private static object _lock = new object();
         static void Main(string[] args)
         {
             if (!Directory.Exists(WatcherFolder))
@@ -29,21 +30,28 @@ namespace FileWatcher.Demo
 
         static void OnAllFilesFinishedChangingEvent(object sender, AllFilesFinishedChangingEventArgs e)
         {
-            Console.WriteLine("OnAllFilesFinishedChangingEvent:");
-            foreach (var fileFinishedChangingEventArgs in e.FilesFinishedChanging)
+            lock (_lock)
             {
-                Console.WriteLine("  FilePath = {0}", fileFinishedChangingEventArgs.FilePath);
-                Console.WriteLine("  ChangeType = {0}", Enum.GetName(typeof(WatcherChangeTypes), fileFinishedChangingEventArgs.ChangeType));
+                Console.WriteLine("OnAllFilesFinishedChangingEvent:");
+                foreach (var fileFinishedChangingEventArgs in e.FilesFinishedChanging)
+                {
+                    Console.WriteLine("  FilePath = {0}", fileFinishedChangingEventArgs.FilePath);
+                    Console.WriteLine("  ChangeType = {0}",
+                                      Enum.GetName(typeof (FileEventType), fileFinishedChangingEventArgs.ChangeType));
+                }
+                Console.WriteLine();
             }
-            Console.WriteLine();
         }
 
         static void OnFileFinishedChangingEvent(object sender, FileFinishedChangingEventArgs e)
         {
-            Console.WriteLine("FileFinishedChangingEvent:");
-            Console.WriteLine("  FilePath = {0}", e.FilePath);
-            Console.WriteLine("  ChangeType = {0}", Enum.GetName(typeof(WatcherChangeTypes), e.ChangeType));
-            Console.WriteLine();
+            lock (_lock)
+            {
+                Console.WriteLine("FileFinishedChangingEvent:");
+                Console.WriteLine("  FilePath = {0}", e.FilePath);
+                Console.WriteLine("  ChangeType = {0}", Enum.GetName(typeof (FileEventType), e.ChangeType));
+                Console.WriteLine();
+            }
         }
     }
 }

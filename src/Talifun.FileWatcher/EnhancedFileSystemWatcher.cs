@@ -35,16 +35,16 @@ namespace Talifun.FileWatcher
             IncludeSubdirectories = includeSubdirectories;
 
             _timer = new System.Timers.Timer();
-            _timer.Elapsed += new ElapsedEventHandler(OnTimeUp);
+            _timer.Elapsed += OnTimeUp;
             _timer.Interval = PollTime;
             _timer.Enabled = true;
             _timer.AutoReset = false;
 
-            _fileSystemWatcherChangedEvent = new FileSystemEventHandler(OnFileChanged);
-            _fileSystemWatcherCreatedEvent = new FileSystemEventHandler(OnFileCreated);
-            _fileSystemWatcherDeletedEvent = new FileSystemEventHandler(OnFileDeleted);
-            _fileSystemWatcherRenamedEvent = new RenamedEventHandler(OnFileRenamed);
-            _fileFinishedChangingCallback = new FileFinishedChangingCallback(OnFileFinishedChanging);
+            _fileSystemWatcherChangedEvent = OnFileChanged;
+            _fileSystemWatcherCreatedEvent = OnFileCreated;
+            _fileSystemWatcherDeletedEvent = OnFileDeleted;
+            _fileSystemWatcherRenamedEvent = OnFileRenamed;
+            _fileFinishedChangingCallback = OnFileFinishedChanging;
 
     		_fileSystemWatcher = new FileSystemWatcher(FolderToWatch)
     		{
@@ -73,13 +73,15 @@ namespace Talifun.FileWatcher
             if (!_fileSystemWatcher.EnableRaisingEvents) return;
             _fileSystemWatcher.EnableRaisingEvents = false;
 
-            Thread.Sleep(0);
-
             lock (_filesRaisingEventsLock)
             {
-                _timer.Stop();
+                if (_timer != null)
+                {
+                    _timer.Stop();
+                }
                 _nextFileToCheck = string.Empty;
                 _filesChanging.Clear();
+                _filesFinishedChanging.Clear();
             }
         }
 
@@ -127,7 +129,7 @@ namespace Talifun.FileWatcher
 				if (!ShouldMonitorFile(file)) continue;
 
 				var fileInfo = new FileInfo(file);
-                Push(fileInfo.FullName, new FileSystemEventArgs(WatcherChangeTypes.All, fileInfo.DirectoryName, fileInfo.Name));
+                Push(fileInfo.FullName, FileEventType.InDirectory);
 			}
         }
 
@@ -186,12 +188,12 @@ namespace Talifun.FileWatcher
         /// Add a file event that has occurred for a file.
         /// </summary>
         /// <param name="filePath"></param>
-        /// <param name="e"></param>
-        private void Push(string filePath, FileSystemEventArgs e)
+        /// <param name="fileEventType"></param>
+        private void Push(string filePath, FileEventType fileEventType)
         {
             if (string.IsNullOrEmpty(filePath)) return;
 
-            IFileChangingItem item = new FileChangingItem(e);
+            IFileChangingItem item = new FileChangingItem(filePath, fileEventType);
             item.FireTime = DateTime.Now.AddMilliseconds(PollTime);
             _filesChanging.Add(filePath, item);
 
@@ -264,10 +266,10 @@ namespace Talifun.FileWatcher
         #region Events raised by file watcher
 
         private void OnTimeUp(object sender, ElapsedEventArgs e)
-        {
-            if (_timer == null) return;
+        { 
             lock (_filesRaisingEventsLock)
             {
+                if (_timer == null) return;
                 _timer.Stop();
 
                 if (!string.IsNullOrEmpty(_nextFileToCheck) && _filesChanging.ContainsKey(_nextFileToCheck))
@@ -275,7 +277,8 @@ namespace Talifun.FileWatcher
                     var item = _filesChanging[_nextFileToCheck];
                     if (item.FireTime <= DateTime.Now)
                     {
-                        _fileFinishedChangingCallback(item.FileSystemEventArgs);
+                        var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(item.FilePath, item.FileEventType, UserState);
+                        _fileFinishedChangingCallback(fileFinishedChangingEventArgs);
                     }
                 }
 
@@ -283,9 +286,9 @@ namespace Talifun.FileWatcher
             }
         }
 
-        private void OnFileFinishedChanging(FileSystemEventArgs e)
+        private void OnFileFinishedChanging(FileFinishedChangingEventArgs e)
         {
-            var filePath = e.FullPath;
+            var filePath = e.FilePath;
 
             lock (_filesRaisingEventsLock)
             {
@@ -303,7 +306,7 @@ namespace Talifun.FileWatcher
                 }
             }
 
-            var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(filePath, WatcherChangeTypes.Changed, UserState);
+            var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(filePath, e.ChangeType, UserState);
 
             //We only want to know about the last event, not any that may have happened in the mean time
             _filesFinishedChanging[fileFinishedChangingEventArgs.FilePath] = fileFinishedChangingEventArgs;
@@ -316,7 +319,7 @@ namespace Talifun.FileWatcher
                 {
                     if (_filesFinishedChanging != null && _filesFinishedChanging.Count >= 1)
                     {
-                        var allFilesFinishedChangingEventArgs = new AllFilesFinishedChangingEventArgs(new List<FileFinishedChangingEventArgs>(_filesFinishedChanging.Values));
+                        var allFilesFinishedChangingEventArgs = new AllFilesFinishedChangingEventArgs(new List<FileFinishedChangingEventArgs>(_filesFinishedChanging.Values), UserState);
                         RaiseAsynchronousOnAllFilesFinishedChangingEvent(allFilesFinishedChangingEventArgs);
 
                         _filesFinishedChanging = new Dictionary<string, FileFinishedChangingEventArgs>();
@@ -339,7 +342,7 @@ namespace Talifun.FileWatcher
                 }
                 else
                 {
-                    Push(filePath, e);
+                    Push(filePath, FileEventType.Created);
                 }
             }
 
@@ -361,7 +364,7 @@ namespace Talifun.FileWatcher
                 }
                 else
                 {
-                    Push(filePath, e);
+                    Push(filePath, FileEventType.Changed);
                 }
             }
 
@@ -380,7 +383,7 @@ namespace Talifun.FileWatcher
                 {
                     Pop(filePath);
 
-                    var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(filePath, WatcherChangeTypes.Deleted, UserState);
+                    var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(filePath, FileEventType.Deleted, UserState);
                     RaiseAsynchronousOnFileFinishedChangingEvent(fileFinishedChangingEventArgs);
                 }
             }
@@ -400,7 +403,7 @@ namespace Talifun.FileWatcher
                 {
                     Pop(filePath);
 
-                    var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(filePath, WatcherChangeTypes.Renamed, UserState);
+                    var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(filePath, FileEventType.Renamed, UserState);
                     RaiseAsynchronousOnFileFinishedChangingEvent(fileFinishedChangingEventArgs);
                 }
             }

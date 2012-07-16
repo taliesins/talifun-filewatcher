@@ -1,11 +1,10 @@
 using System;
-using System.IO;
 
 namespace Talifun.FileWatcher
 {
     public class FileFinishedChangingEventArgs : EventArgs
     {
-        public FileFinishedChangingEventArgs(string filePath, WatcherChangeTypes changeType, object userState)
+        public FileFinishedChangingEventArgs(string filePath, FileEventType changeType, object userState)
         {
             FilePath = filePath;
             ChangeType = changeType;
@@ -13,7 +12,7 @@ namespace Talifun.FileWatcher
         }
 
         public string FilePath { get; private set; }
-        public WatcherChangeTypes ChangeType { get; private set; }
+        public FileEventType ChangeType { get; private set; }
         public object UserState { get; private set; }
     }
 }
