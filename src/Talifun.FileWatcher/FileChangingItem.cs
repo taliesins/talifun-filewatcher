@@ -11,7 +11,7 @@ namespace Talifun.FileWatcher
         }
 
         public string FilePath { get; private set; }
-        public FileEventType FileEventType { get; private set; }
+        public FileEventType FileEventType { get; set; }
         public DateTime FireTime { get; set; }
     }
 }

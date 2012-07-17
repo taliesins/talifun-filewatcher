@@ -19,7 +19,7 @@ namespace FileWatcher.Demo
             Console.WriteLine("Try copying one file into watched folder");
             Console.WriteLine("Try copying a batch of files into a watched folder");
 
-            var fileWatcher = EnhancedFileSystemWatcherFactory.Instance.CreateEnhancedFileSystemWatcher(WatcherFolder);
+            var fileWatcher = EnhancedFileSystemWatcherFactory.Instance.CreateEnhancedFileSystemWatcher(WatcherFolder, "", 20000, true);
             fileWatcher.Start();
             fileWatcher.FileFinishedChangingEvent += OnFileFinishedChangingEvent;
             fileWatcher.AllFilesFinishedChangingEvent += OnAllFilesFinishedChangingEvent;

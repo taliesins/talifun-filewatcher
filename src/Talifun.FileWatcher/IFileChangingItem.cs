@@ -14,7 +14,6 @@ namespace Talifun.FileWatcher
 
         FileEventType FileEventType
         {
-            get;
-        }
+            get; set; }
     }
 }

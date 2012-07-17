@@ -128,8 +128,7 @@ namespace Talifun.FileWatcher
 			{
 				if (!ShouldMonitorFile(file)) continue;
 
-				var fileInfo = new FileInfo(file);
-                Push(fileInfo.FullName, FileEventType.InDirectory);
+                Push(file, FileEventType.InDirectory);
 			}
         }
 
@@ -338,6 +337,7 @@ namespace Talifun.FileWatcher
             {
                 if (_filesChanging.ContainsKey(filePath))
                 {
+                    _filesChanging[filePath].FileEventType = FileEventType.Created;
                     Touch(filePath);
                 }
                 else
@@ -360,6 +360,7 @@ namespace Talifun.FileWatcher
             {
                 if (_filesChanging.ContainsKey(filePath))
                 {
+                    _filesChanging[filePath].FileEventType = FileEventType.Changed;
                     Touch(filePath);
                 }
                 else
