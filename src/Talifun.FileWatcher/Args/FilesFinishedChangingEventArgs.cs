@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 namespace Talifun.FileWatcher
 {
-    public class AllFilesFinishedChangingEventArgs : EventArgs
+    public class FilesFinishedChangingEventArgs : EventArgs
     {
-        public AllFilesFinishedChangingEventArgs(List<FileFinishedChangingEventArgs> filesFinishedChanging, object userState)
+        public FilesFinishedChangingEventArgs(List<FileFinishedChangingEventArgs> filesFinishedChanging, object userState)
         {
             FilesFinishedChanging = filesFinishedChanging;
             UserState = userState;

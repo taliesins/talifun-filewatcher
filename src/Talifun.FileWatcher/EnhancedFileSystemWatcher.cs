@@ -17,7 +17,8 @@ namespace Talifun.FileWatcher
         private Dictionary<string, IFileChangingItem> _filesChanging;
         private Dictionary<string, FileFinishedChangingEventArgs> _filesFinishedChanging;
 
-        private readonly System.Timers.Timer _timer = new System.Timers.Timer();
+        private readonly System.Timers.Timer _timer;
+        private readonly System.Timers.Timer _timerForFileActivityFinished;
         private string _nextFileToCheck = string.Empty;
 
         private readonly FileSystemEventHandler _fileSystemWatcherChangedEvent;
@@ -39,6 +40,12 @@ namespace Talifun.FileWatcher
             _timer.Interval = PollTime;
             _timer.Enabled = true;
             _timer.AutoReset = false;
+
+            _timerForFileActivityFinished = new System.Timers.Timer();
+            _timerForFileActivityFinished.Elapsed += OnTimeUpForFileActivityFinished;
+            _timerForFileActivityFinished.Interval = PollTime;
+            _timerForFileActivityFinished.Enabled = true;
+            _timerForFileActivityFinished.AutoReset = false;
 
             _fileSystemWatcherChangedEvent = OnFileChanged;
             _fileSystemWatcherCreatedEvent = OnFileCreated;
@@ -108,6 +115,10 @@ namespace Talifun.FileWatcher
             GetAllFilesToCheck(FolderToWatch);
         }
 
+        /// <summary>
+        /// Retrieve all files that should raise an InDirectory event i.e. they match the filter.
+        /// </summary>
+        /// <param name="folderPath"></param>
         private void GetAllFilesToCheck(string folderPath)
         {
             if (folderPath == null || folderPath.Length <= 0) return;
@@ -132,6 +143,11 @@ namespace Talifun.FileWatcher
 			}
         }
 
+        /// <summary>
+        /// Check if file is in use.
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <returns></returns>
         private static bool IsFileLocked(string filePath)
         {
             var result = false;
@@ -154,6 +170,11 @@ namespace Talifun.FileWatcher
             return result;
         }
 
+        /// <summary>
+        /// Does file match provided filter.
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <returns>True if it matches filter; else false</returns>
 		private bool ShouldMonitorFile(string fileName)
 		{
 			const RegexOptions regxOptions = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline;
@@ -212,21 +233,19 @@ namespace Talifun.FileWatcher
 
             _filesChanging.Remove(filePath);
 
-            if (_nextFileToCheck == filePath)
-            {
-                GetNextFileToCheck();
-            }
+            GetNextFileToCheck();
         }
 
+        /// <summary>
+        /// Retrieve the next file in the queue to have its event raised.
+        /// </summary>
         private void GetNextFileToCheck()
         {
             _timer.Stop();
-
+            
             var currentDateTime = DateTime.Now;
 
             _nextFileToCheck = string.Empty;
-
-            if (_filesChanging == null || _filesChanging.Count < 1) return;
 
             var lowestDateTime = DateTime.MaxValue;
             var nextFileToCheck = string.Empty;
@@ -240,30 +259,51 @@ namespace Talifun.FileWatcher
             	nextFileToCheck = item.Key;
             }
 
-            //There are no more files to raise events for
-            if (string.IsNullOrEmpty(nextFileToCheck)) return;
-
-            double interval = 1;
-
-            if (lowestDateTime > currentDateTime)
+            
+            if (string.IsNullOrEmpty(nextFileToCheck))
             {
-                interval = lowestDateTime.Subtract(currentDateTime).TotalMilliseconds;
+                //There are no more files to raise events for
+                if (!_timerForFileActivityFinished.Enabled)
+                {
+                    _timerForFileActivityFinished.Interval = PollTime;
+                    _timerForFileActivityFinished.Start();
+                }
             }
-
-            if (interval < 1)
+            else
             {
-                interval = 1;
-            }
+                if (_timerForFileActivityFinished.Enabled)
+                {
+                    _timerForFileActivityFinished.Stop();
+                }
+                double interval = 1;
 
-            _nextFileToCheck = nextFileToCheck;
-            _timer.Interval = interval;
-            _timer.Start();
+                if (lowestDateTime > currentDateTime)
+                {
+                    interval = lowestDateTime.Subtract(currentDateTime).TotalMilliseconds;
+                }
+
+                if (interval < 1)
+                {
+                    interval = 1;
+                }
+
+                _nextFileToCheck = nextFileToCheck;
+                _timer.Interval = interval;
+                _timer.Start();
+            }
         }
 
         #endregion
 
         #region Events raised by file watcher
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        /// <remarks>We using an in memory queue and poping them off one by one. We may have 1000s of file events so executing them all
+        /// at once does not scale well.</remarks>
         private void OnTimeUp(object sender, ElapsedEventArgs e)
         { 
             lock (_filesRaisingEventsLock)
@@ -285,12 +325,25 @@ namespace Talifun.FileWatcher
             }
         }
 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="e"></param>
+        /// <remarks>It is assumed that there will be no file events once this has been raised. Chances are that file 
+        /// events are going to occur, so its up to the calling client to switch off the file watcher while processing if necessary.</remarks>
+        private void OnTimeUpForFileActivityFinished(object sender, ElapsedEventArgs e)
+        {
+            _timerForFileActivityFinished.Stop();
+            var activityFinishedEventArgs = new FileActivityFinishedEventArgs(UserState);
+            RaiseAsynchronousOnFileActivityFinishedEvent(activityFinishedEventArgs);
+        }
+
         private void OnFileFinishedChanging(FileFinishedChangingEventArgs e)
         {
-            var filePath = e.FilePath;
-
             lock (_filesRaisingEventsLock)
             {
+                var filePath = e.FilePath;
                 if (_filesChanging.ContainsKey(filePath))
                 {
                     if (IsFileLocked(filePath))
@@ -301,29 +354,27 @@ namespace Talifun.FileWatcher
                     else
                     {
                         Pop(filePath);
+
+                        var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(e.FilePath, e.ChangeType, UserState);
+
+                        //We only want to know about the last event, not any that may have happened in the mean time
+                        _filesFinishedChanging[fileFinishedChangingEventArgs.FilePath] = fileFinishedChangingEventArgs;
+
+                        RaiseAsynchronousOnFileFinishedChangingEvent(fileFinishedChangingEventArgs);
+
+                        if (_filesChanging == null || _filesChanging.Count < 1)
+                        {
+                            if (_filesFinishedChanging != null && _filesFinishedChanging.Count > 0)
+                            {
+                                //There are no more files that are in the change queue so let everyone know the files have finished changing
+                                var filesFinishedChangingEventArgs = new FilesFinishedChangingEventArgs(new List<FileFinishedChangingEventArgs>(_filesFinishedChanging.Values), UserState);
+                                RaiseAsynchronousOnFilesFinishedChangingEvent(filesFinishedChangingEventArgs);
+
+                                _filesFinishedChanging = new Dictionary<string, FileFinishedChangingEventArgs>();
+                            }
+                        }
                     }
                 }
-            }
-
-            var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(filePath, e.ChangeType, UserState);
-
-            //We only want to know about the last event, not any that may have happened in the mean time
-            _filesFinishedChanging[fileFinishedChangingEventArgs.FilePath] = fileFinishedChangingEventArgs;
-
-            RaiseAsynchronousOnFileFinishedChangingEvent(fileFinishedChangingEventArgs);
-
-            lock (_filesRaisingEventsLock)
-            {
-                if (_filesChanging == null || _filesChanging.Count < 1)
-                {
-                    if (_filesFinishedChanging != null && _filesFinishedChanging.Count >= 1)
-                    {
-                        var allFilesFinishedChangingEventArgs = new AllFilesFinishedChangingEventArgs(new List<FileFinishedChangingEventArgs>(_filesFinishedChanging.Values), UserState);
-                        RaiseAsynchronousOnAllFilesFinishedChangingEvent(allFilesFinishedChangingEventArgs);
-
-                        _filesFinishedChanging = new Dictionary<string, FileFinishedChangingEventArgs>();
-                    }
-                };
             }
         }
 
@@ -346,8 +397,8 @@ namespace Talifun.FileWatcher
                 }
             }
 
-            var fileCreatedEvent = new FileCreatedEventArgs(e.FullPath, UserState);
-            RaiseAsynchronousOnFileCreatedEvent(fileCreatedEvent);
+            var fileCreatedEventArgs = new FileCreatedEventArgs(e.FullPath, UserState);
+            RaiseAsynchronousOnFileCreatedEvent(fileCreatedEventArgs);
         }
 
         private void OnFileChanged(object sender, FileSystemEventArgs e)
@@ -389,8 +440,8 @@ namespace Talifun.FileWatcher
                 }
             }
 
-            var fileDeletedEvent = new FileDeletedEventArgs(e.FullPath, UserState);
-            RaiseAsynchronousOnFileDeletedEvent(fileDeletedEvent);
+            var fileDeletedEventArgs = new FileDeletedEventArgs(e.FullPath, UserState);
+            RaiseAsynchronousOnFileDeletedEvent(fileDeletedEventArgs);
         }
 
         private void OnFileRenamed(object sender, RenamedEventArgs e)
@@ -409,8 +460,8 @@ namespace Talifun.FileWatcher
                 }
             }
 
-            var fileRenamedEvent = new FileRenamedEventArgs(e.OldFullPath, e.FullPath, UserState);
-            RaiseAsynchronousOnFileRenamedEvent(fileRenamedEvent);
+            var fileRenamedEventArgs = new FileRenamedEventArgs(e.OldFullPath, e.FullPath, UserState);
+            RaiseAsynchronousOnFileRenamedEvent(fileRenamedEventArgs);
         }
 
         #endregion
@@ -1005,50 +1056,50 @@ namespace Talifun.FileWatcher
         }
         #endregion
 
-        #region AllFilesFinishedChangingEvent
+        #region FilesFinishedChangingEvent
         /// <summary>
         /// Where the actual event is stored.
         /// </summary>
-        private AllFilesFinishedChangingEventHandler _allFilesFinishedChangingEvent;
+        private FilesFinishedChangingEventHandler _filesFinishedChangingEvent;
 
         /// <summary>
         /// Lock for event delegate access.
         /// </summary>
-        private readonly object _allFilesFinishedChangingEventLock = new object();
+        private readonly object _filesFinishedChangingEventLock = new object();
 
         /// <summary>
         /// The event that is fired.
         /// </summary>
-        public event AllFilesFinishedChangingEventHandler AllFilesFinishedChangingEvent
+        public event FilesFinishedChangingEventHandler FilesFinishedChangingEvent
         {
             add
             {
-                if (!Monitor.TryEnter(_allFilesFinishedChangingEventLock, _lockTimeout))
+                if (!Monitor.TryEnter(_filesFinishedChangingEventLock, _lockTimeout))
                 {
-                    throw new ApplicationException("Timeout waiting for lock - AllFilesFinishedChangingEvent.add");
+                    throw new ApplicationException("Timeout waiting for lock - FilesFinishedChangingEvent.add");
                 }
                 try
                 {
-                    _allFilesFinishedChangingEvent += value;
+                    _filesFinishedChangingEvent += value;
                 }
                 finally
                 {
-                    Monitor.Exit(_allFilesFinishedChangingEventLock);
+                    Monitor.Exit(_filesFinishedChangingEventLock);
                 }
             }
             remove
             {
-                if (!Monitor.TryEnter(_allFilesFinishedChangingEventLock, _lockTimeout))
+                if (!Monitor.TryEnter(_filesFinishedChangingEventLock, _lockTimeout))
                 {
-                    throw new ApplicationException("Timeout waiting for lock - AllFilesFinishedChangingEvent.remove");
+                    throw new ApplicationException("Timeout waiting for lock - FilesFinishedChangingEvent.remove");
                 }
                 try
                 {
-                    _allFilesFinishedChangingEvent -= value;
+                    _filesFinishedChangingEvent -= value;
                 }
                 finally
                 {
-                    Monitor.Exit(_allFilesFinishedChangingEventLock);
+                    Monitor.Exit(_filesFinishedChangingEventLock);
                 }
             }
         }
@@ -1056,15 +1107,15 @@ namespace Talifun.FileWatcher
         /// <summary>
         /// Template method to add default behaviour for the event
         /// </summary>
-        private void OnAllFilesFinishedChangingEvent(AllFilesFinishedChangingEventArgs e)
+        private void OnFilesFinishedChangingEvent(FilesFinishedChangingEventArgs e)
         {
-            // TODO: Implement default behaviour of OnAllFilesFinishedChangingEvent
+            // TODO: Implement default behaviour of OnFilesFinishedChangingEvent
         }
 
-        private void AsynchronousOnAllFilesFinishedChangingEventRaised(object state)
+        private void AsynchronousOnFilesFinishedChangingEventRaised(object state)
         {
-            var e = state as AllFilesFinishedChangingEventArgs;
-            RaiseOnAllFilesFinishedChangingEvent(e);
+            var e = state as FilesFinishedChangingEventArgs;
+            RaiseOnFilesFinishedChangingEvent(e);
         }
 
         /// <summary>
@@ -1072,9 +1123,9 @@ namespace Talifun.FileWatcher
         /// i.e. it will wait until all event handlers have processed the event.
         /// </summary>
         /// <param name="state">The state to be passed to the event.</param>
-        private void RaiseCrossThreadOnAllFilesFinishedChangingEvent(AllFilesFinishedChangingEventArgs e)
+        private void RaiseCrossThreadOnFilesFinishedChangingEvent(FilesFinishedChangingEventArgs e)
         {
-            _asyncOperation.SynchronizationContext.Send(new SendOrPostCallback(AsynchronousOnAllFilesFinishedChangingEventRaised), e);
+            _asyncOperation.SynchronizationContext.Send(new SendOrPostCallback(AsynchronousOnFilesFinishedChangingEventRaised), e);
         }
 
         /// <summary>
@@ -1083,9 +1134,9 @@ namespace Talifun.FileWatcher
         /// handlers have not processed the event yet.
         /// </summary>
         /// <param name="state">The state to be passed to the event.</param>
-        private void RaiseAsynchronousOnAllFilesFinishedChangingEvent(AllFilesFinishedChangingEventArgs e)
+        private void RaiseAsynchronousOnFilesFinishedChangingEvent(FilesFinishedChangingEventArgs e)
         {
-            _asyncOperation.Post(new SendOrPostCallback(AsynchronousOnAllFilesFinishedChangingEventRaised), e);
+            _asyncOperation.Post(new SendOrPostCallback(AsynchronousOnFilesFinishedChangingEventRaised), e);
         }
 
         /// <summary>
@@ -1093,28 +1144,146 @@ namespace Talifun.FileWatcher
         /// i.e. it will wait until all event handlers have processed the event.
         /// </summary>
         /// <param name="e">The state to be passed to the event.</param>
-        private void RaiseOnAllFilesFinishedChangingEvent(AllFilesFinishedChangingEventArgs e)
+        private void RaiseOnFilesFinishedChangingEvent(FilesFinishedChangingEventArgs e)
         {
             // Make a temporary copy of the event to avoid possibility of
             // a race condition if the last subscriber unsubscribes
             // immediately after the null check and before the event is raised.
 
-            AllFilesFinishedChangingEventHandler eventHandler;
+            FilesFinishedChangingEventHandler eventHandler;
 
-            if (!Monitor.TryEnter(_allFilesFinishedChangingEventLock, _lockTimeout))
+            if (!Monitor.TryEnter(_filesFinishedChangingEventLock, _lockTimeout))
             {
-                throw new ApplicationException("Timeout waiting for lock - RaiseOnAllFilesFinishedChangingEvent");
+                throw new ApplicationException("Timeout waiting for lock - RaiseOnFilesFinishedChangingEvent");
             }
             try
             {
-                eventHandler = _allFilesFinishedChangingEvent;
+                eventHandler = _filesFinishedChangingEvent;
             }
             finally
             {
-                Monitor.Exit(_allFilesFinishedChangingEventLock);
+                Monitor.Exit(_filesFinishedChangingEventLock);
             }
 
-            OnAllFilesFinishedChangingEvent(e);
+            OnFilesFinishedChangingEvent(e);
+
+            if (eventHandler != null)
+            {
+                eventHandler(this, e);
+            }
+        }
+        #endregion
+
+        #region FileActivityFinishedEvent
+        /// <summary>
+        /// Where the actual event is stored.
+        /// </summary>
+        private FileActivityFinishedEventHandler _fileActivityFinishedEvent;
+
+        /// <summary>
+        /// Lock for event delegate access.
+        /// </summary>
+        private readonly object _fileActivityFinishedEventLock = new object();
+
+        /// <summary>
+        /// The event that is fired.
+        /// </summary>
+        public event FileActivityFinishedEventHandler FileActivityFinishedEvent
+        {
+            add
+            {
+                if (!Monitor.TryEnter(_fileActivityFinishedEventLock, _lockTimeout))
+                {
+                    throw new ApplicationException("Timeout waiting for lock - FileActivityFinishedEvent.add");
+                }
+                try
+                {
+                    _fileActivityFinishedEvent += value;
+                }
+                finally
+                {
+                    Monitor.Exit(_fileActivityFinishedEventLock);
+                }
+            }
+            remove
+            {
+                if (!Monitor.TryEnter(_fileActivityFinishedEventLock, _lockTimeout))
+                {
+                    throw new ApplicationException("Timeout waiting for lock - FileActivityFinishedEvent.remove");
+                }
+                try
+                {
+                    _fileActivityFinishedEvent -= value;
+                }
+                finally
+                {
+                    Monitor.Exit(_fileActivityFinishedEventLock);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Template method to add default behaviour for the event
+        /// </summary>
+        private void OnFileActivityFinishedEvent(FileActivityFinishedEventArgs e)
+        {
+            // TODO: Implement default behaviour of OnFileActivityFinishedEvent
+        }
+
+        private void AsynchronousOnFileActivityFinishedEventRaised(object state)
+        {
+            var e = state as FileActivityFinishedEventArgs;
+            RaiseOnFileActivityFinishedEvent(e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the calling thread synchronously. 
+        /// i.e. it will wait until all event handlers have processed the event.
+        /// </summary>
+        /// <param name="state">The state to be passed to the event.</param>
+        private void RaiseCrossThreadOnFileActivityFinishedEvent(FileActivityFinishedEventArgs e)
+        {
+            _asyncOperation.SynchronizationContext.Send(new SendOrPostCallback(AsynchronousOnFileActivityFinishedEventRaised), e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the calling thread asynchronously. 
+        /// i.e. it will immediatly continue processing even though event 
+        /// handlers have not processed the event yet.
+        /// </summary>
+        /// <param name="state">The state to be passed to the event.</param>
+        private void RaiseAsynchronousOnFileActivityFinishedEvent(FileActivityFinishedEventArgs e)
+        {
+            _asyncOperation.Post(new SendOrPostCallback(AsynchronousOnFileActivityFinishedEventRaised), e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the current thread synchronously.
+        /// i.e. it will wait until all event handlers have processed the event.
+        /// </summary>
+        /// <param name="e">The state to be passed to the event.</param>
+        private void RaiseOnFileActivityFinishedEvent(FileActivityFinishedEventArgs e)
+        {
+            // Make a temporary copy of the event to avoid possibility of
+            // a race condition if the last subscriber unsubscribes
+            // immediately after the null check and before the event is raised.
+
+            FileActivityFinishedEventHandler eventHandler;
+
+            if (!Monitor.TryEnter(_fileActivityFinishedEventLock, _lockTimeout))
+            {
+                throw new ApplicationException("Timeout waiting for lock - RaiseOnFileActivityFinishedEvent");
+            }
+            try
+            {
+                eventHandler = _fileActivityFinishedEvent;
+            }
+            finally
+            {
+                Monitor.Exit(_fileActivityFinishedEventLock);
+            }
+
+            OnFileActivityFinishedEvent(e);
 
             if (eventHandler != null)
             {

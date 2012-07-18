@@ -94,6 +94,15 @@ namespace Talifun.FileWatcher
         /// This event is raised when a few changes to a multiple files have finished taking place. The polltime
         /// specifies how long to wait without activity before assuming that file changes to all files are complete.
         /// </summary>
-        event AllFilesFinishedChangingEventHandler AllFilesFinishedChangingEvent;
+        /// <remarks>Use this to listen for batch updates to files.</remarks>
+        event FilesFinishedChangingEventHandler FilesFinishedChangingEvent;
+
+        /// <summary>
+        /// This event is raised when changes to a multiple files and files in the directory have finished taking place. 
+        /// The polltime specifies how long to wait without activity before assuming that file changes to all files are complete.
+        /// </summary>
+        /// <remarks>Use this to wait for all file events to finish. It is recommended to switch off the file watcher while 
+        /// processing events</remarks>
+        event FileActivityFinishedEventHandler FileActivityFinishedEvent;
     }
 }
