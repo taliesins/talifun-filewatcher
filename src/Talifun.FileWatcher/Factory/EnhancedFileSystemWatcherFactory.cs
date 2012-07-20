@@ -2,37 +2,55 @@ namespace Talifun.FileWatcher
 {
     public sealed class EnhancedFileSystemWatcherFactory : IEnhancedFileSystemWatcherFactory
     {
+        private const int DefaultPollTime = 2;
+        private const string DefaultIncludeFilter = "";
+        private const string DefaulExcludeFilter = "";
+        private const bool DefaultIncludeSubDirectories = true;
+
         private EnhancedFileSystemWatcherFactory()
         {
         }
 
         public static readonly IEnhancedFileSystemWatcherFactory Instance = new EnhancedFileSystemWatcherFactory();
 
-        #region IEnhancedFileSystemWatcherFactory Members
         public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch)
         {
-            return CreateEnhancedFileSystemWatcher(folderToWatch, string.Empty);
+            return CreateEnhancedFileSystemWatcher(folderToWatch, DefaultIncludeFilter);
         }
 
-        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string filter)
+        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string includeFilter)
         {
-            return CreateEnhancedFileSystemWatcher(folderToWatch, filter, 2, true);
+            return CreateEnhancedFileSystemWatcher(folderToWatch, includeFilter, DefaultPollTime, DefaultIncludeSubDirectories);
         }
 
-        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string filter, int pollTime, bool includeSubdirectories)
+        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string includeFilter, int pollTime, bool includeSubdirectories)
         {
-            return new EnhancedFileSystemWatcher(folderToWatch, filter, pollTime, includeSubdirectories);
+            return CreateEnhancedFileSystemWatcher(folderToWatch, includeFilter, DefaulExcludeFilter, pollTime, includeSubdirectories);
         }
 
-        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string filter, int pollTime, bool includeSubdirectories, object userState)
+        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string includeFilter, int pollTime, bool includeSubdirectories, object userState)
         {
-            IEnhancedFileSystemWatcher folderMonitor = new EnhancedFileSystemWatcher(folderToWatch, filter, pollTime, includeSubdirectories)
+            return CreateEnhancedFileSystemWatcher(folderToWatch, includeFilter, DefaulExcludeFilter, pollTime, includeSubdirectories, userState);
+        }
+
+        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string includeFilter, string excludeFiler)
+        {
+            return CreateEnhancedFileSystemWatcher(folderToWatch, includeFilter, excludeFiler, DefaultPollTime, DefaultIncludeSubDirectories);
+        }
+
+        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string includeFilter, string excludeFiler, int pollTime, bool includeSubdirectories)
+        {
+            return new EnhancedFileSystemWatcher(folderToWatch, includeFilter, excludeFiler, pollTime, includeSubdirectories);
+        }
+
+        public IEnhancedFileSystemWatcher CreateEnhancedFileSystemWatcher(string folderToWatch, string includeFilter, string excludeFiler, int pollTime, bool includeSubdirectories, object userState)
+        {
+            IEnhancedFileSystemWatcher folderMonitor = new EnhancedFileSystemWatcher(folderToWatch, includeFilter, excludeFiler, pollTime, includeSubdirectories)
             {
                 UserState = userState
             };
 
             return folderMonitor;
         }
-        #endregion
     }
 }

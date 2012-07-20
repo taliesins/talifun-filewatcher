@@ -33,7 +33,16 @@ namespace Talifun.FileWatcher
         /// <summary>
         /// The wildcard filter to use for files. E.g. *.txt
         /// </summary>
-        string Filter
+        string IncludeFilter
+        {
+            get;
+        }
+
+        /// <summary>
+        /// The wildcard filter to use to exclude files from matches. E.g. important.txt
+        /// </summary>
+        /// <remarks>Just to make excluding files a little easier. Writing it all in the include filter can be difficult.</remarks>
+        string ExcludeFilter
         {
             get;
         }

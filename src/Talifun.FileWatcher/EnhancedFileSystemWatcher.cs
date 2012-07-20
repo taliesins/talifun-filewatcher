@@ -28,10 +28,11 @@ namespace Talifun.FileWatcher
         private readonly FileFinishedChangingCallback _fileFinishedChangingCallback;
         private readonly FileSystemWatcher _fileSystemWatcher;
 
-    	public EnhancedFileSystemWatcher(string folderToWatch, string filter, int pollTime, bool includeSubdirectories)
+    	public EnhancedFileSystemWatcher(string folderToWatch, string includeFilter, string excludeFilter, int pollTime, bool includeSubdirectories)
         {
             FolderToWatch = folderToWatch;
-            Filter = filter;
+            IncludeFilter = includeFilter;
+            ExcludeFilter = excludeFilter;
             PollTime = pollTime;
             IncludeSubdirectories = includeSubdirectories;
 
@@ -68,24 +69,33 @@ namespace Talifun.FileWatcher
         public void Start()
         {
             if (_fileSystemWatcher.EnableRaisingEvents) return;
-            _filesChanging = new Dictionary<string, IFileChangingItem>();
-            _filesFinishedChanging = new Dictionary<string, FileFinishedChangingEventArgs>();
-            _fileSystemWatcher.EnableRaisingEvents = true;
+            lock (_filesRaisingEventsLock)
+            {
+                _filesChanging = new Dictionary<string, IFileChangingItem>();
+                _filesFinishedChanging = new Dictionary<string, FileFinishedChangingEventArgs>();
+                _fileSystemWatcher.EnableRaisingEvents = true;
 
-            RaiseEventsForExistingFiles();
+                RaiseEventsForExistingFiles();
+            }
         }
 
         public void Stop()
         {
             if (!_fileSystemWatcher.EnableRaisingEvents) return;
-            _fileSystemWatcher.EnableRaisingEvents = false;
 
             lock (_filesRaisingEventsLock)
             {
+                _fileSystemWatcher.EnableRaisingEvents = false;
                 if (_timer != null)
                 {
                     _timer.Stop();
                 }
+
+                if (_timerForFileActivityFinished != null)
+                {
+                    _timerForFileActivityFinished.Stop();
+                }
+
                 _nextFileToCheck = string.Empty;
                 _filesChanging.Clear();
                 _filesFinishedChanging.Clear();
@@ -104,7 +114,9 @@ namespace Talifun.FileWatcher
 
         public string FolderToWatch { get; private set; }
 
-        public string Filter { get; private set; }
+        public string IncludeFilter { get; private set; }
+
+        public string ExcludeFilter { get; private set; }
 
         public int PollTime { get; private set; }
 
@@ -178,7 +190,8 @@ namespace Talifun.FileWatcher
 		private bool ShouldMonitorFile(string fileName)
 		{
 			const RegexOptions regxOptions = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline;
-			return (string.IsNullOrEmpty(Filter) || Regex.IsMatch(fileName, Filter, regxOptions));
+			return (string.IsNullOrEmpty(IncludeFilter) || Regex.IsMatch(fileName, IncludeFilter, regxOptions))
+                && (string.IsNullOrEmpty(ExcludeFilter) || !Regex.IsMatch(fileName, ExcludeFilter, regxOptions));
 		}
 
     	#region FilesChanging Queue
@@ -249,16 +262,19 @@ namespace Talifun.FileWatcher
 
             var lowestDateTime = DateTime.MaxValue;
             var nextFileToCheck = string.Empty;
-            foreach (var item in _filesChanging)
+
+            if (_filesChanging != null)
             {
-                var dateTime = item.Value.FireTime;
+                foreach (var item in _filesChanging)
+                {
+                    var dateTime = item.Value.FireTime;
 
-            	if (currentDateTime >= lowestDateTime) continue;
+                    if (currentDateTime >= lowestDateTime) continue;
 
-            	lowestDateTime = dateTime;
-            	nextFileToCheck = item.Key;
+                    lowestDateTime = dateTime;
+                    nextFileToCheck = item.Key;
+                }
             }
-
             
             if (string.IsNullOrEmpty(nextFileToCheck))
             {
