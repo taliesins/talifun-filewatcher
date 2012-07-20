@@ -2,16 +2,12 @@ using System;
 
 namespace Talifun.FileWatcher
 {
-    internal class FileChangingItem : IFileChangingItem
+    public class FileChangingItem : FileEventItem, IFileChangingItem
     {
-        public FileChangingItem(string filePath, FileEventType fileEventType)
+        public FileChangingItem(string filePath, FileEventType fileEventType) : base(filePath, fileEventType)
         {
-            FilePath = filePath;
-            FileEventType = fileEventType;
         }
 
-        public string FilePath { get; private set; }
-        public FileEventType FileEventType { get; set; }
         public DateTime FireTime { get; set; }
     }
 }

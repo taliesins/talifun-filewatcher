@@ -16,6 +16,7 @@ namespace Talifun.FileWatcher
         private readonly object _filesRaisingEventsLock = new object();
         private Dictionary<string, IFileChangingItem> _filesChanging;
         private Dictionary<string, FileFinishedChangingEventArgs> _filesFinishedChanging;
+        private List<IFileEventItem> _fileEventItems;
 
         private readonly System.Timers.Timer _timer;
         private readonly System.Timers.Timer _timerForFileActivityFinished;
@@ -39,13 +40,13 @@ namespace Talifun.FileWatcher
             _timer = new System.Timers.Timer();
             _timer.Elapsed += OnTimeUp;
             _timer.Interval = PollTime;
-            _timer.Enabled = true;
+            _timer.Enabled = false;
             _timer.AutoReset = false;
 
             _timerForFileActivityFinished = new System.Timers.Timer();
             _timerForFileActivityFinished.Elapsed += OnTimeUpForFileActivityFinished;
             _timerForFileActivityFinished.Interval = PollTime;
-            _timerForFileActivityFinished.Enabled = true;
+            _timerForFileActivityFinished.Enabled = false;
             _timerForFileActivityFinished.AutoReset = false;
 
             _fileSystemWatcherChangedEvent = OnFileChanged;
@@ -73,6 +74,7 @@ namespace Talifun.FileWatcher
             {
                 _filesChanging = new Dictionary<string, IFileChangingItem>();
                 _filesFinishedChanging = new Dictionary<string, FileFinishedChangingEventArgs>();
+                _fileEventItems = new List<IFileEventItem>();
                 _fileSystemWatcher.EnableRaisingEvents = true;
 
                 RaiseEventsForExistingFiles();
@@ -98,6 +100,7 @@ namespace Talifun.FileWatcher
 
                 _nextFileToCheck = string.Empty;
                 _filesChanging.Clear();
+                _fileEventItems.Clear();
                 _filesFinishedChanging.Clear();
             }
         }
@@ -244,7 +247,10 @@ namespace Talifun.FileWatcher
         {
             if (string.IsNullOrEmpty(filePath)) return;
 
+            var fileChanging = _filesChanging[filePath];
             _filesChanging.Remove(filePath);
+
+            _fileEventItems.Add(fileChanging);
 
             GetNextFileToCheck();
         }
@@ -263,18 +269,15 @@ namespace Talifun.FileWatcher
             var lowestDateTime = DateTime.MaxValue;
             var nextFileToCheck = string.Empty;
 
-            if (_filesChanging != null)
+            foreach (var item in _filesChanging)
             {
-                foreach (var item in _filesChanging)
-                {
-                    var dateTime = item.Value.FireTime;
+                var dateTime = item.Value.FireTime;
 
-                    if (currentDateTime >= lowestDateTime) continue;
+                if (currentDateTime >= lowestDateTime) continue;
 
-                    lowestDateTime = dateTime;
-                    nextFileToCheck = item.Key;
-                }
-            }
+                lowestDateTime = dateTime;
+                nextFileToCheck = item.Key;
+            }    
             
             if (string.IsNullOrEmpty(nextFileToCheck))
             {
@@ -351,7 +354,9 @@ namespace Talifun.FileWatcher
         private void OnTimeUpForFileActivityFinished(object sender, ElapsedEventArgs e)
         {
             _timerForFileActivityFinished.Stop();
-            var activityFinishedEventArgs = new FileActivityFinishedEventArgs(UserState);
+            var fileEventItems = new List<IFileEventItem>(_fileEventItems);
+            _fileEventItems.Clear();
+            var activityFinishedEventArgs = new FileActivityFinishedEventArgs(fileEventItems, UserState);
             RaiseAsynchronousOnFileActivityFinishedEvent(activityFinishedEventArgs);
         }
 

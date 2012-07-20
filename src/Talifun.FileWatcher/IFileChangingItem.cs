@@ -2,18 +2,8 @@ using System;
 
 namespace Talifun.FileWatcher
 {
-    internal interface IFileChangingItem
+    public interface IFileChangingItem : IFileEventItem
     {
-        DateTime FireTime
-        {
-            get;
-            set;
-        }
-
-        string FilePath { get; }
-
-        FileEventType FileEventType
-        {
-            get; set; }
+        DateTime FireTime { get; set; }
     }
 }
