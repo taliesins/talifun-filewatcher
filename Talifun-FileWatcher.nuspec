@@ -16,6 +16,7 @@
     <tags>talifun file watcher</tags>
   </metadata>
   <files>
-	<file src="bin\Talifun.FileWatcher.dll" target="lib/net40" />
+	<file src="bin\4.0\Talifun.FileWatcher.dll" target="lib/net40" />
+	<file src="bin\3.5\Talifun.FileWatcher.dll" target="lib/net35" />
   </files>  
 </package>
