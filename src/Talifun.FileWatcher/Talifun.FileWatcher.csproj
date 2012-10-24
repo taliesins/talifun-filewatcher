@@ -44,6 +44,9 @@
     <Compile Include="..\GlobalAssemblyInfo.cs">
       <Link>Properties\GlobalAssemblyInfo.cs</Link>
     </Compile>
+    <Compile Include="Args\DirectoryDeletedEventArgs.cs" />
+    <Compile Include="Args\DirectoryRenamedEventArgs.cs" />
+    <Compile Include="Args\DirectoryCreatedEventArgs.cs" />
     <Compile Include="Args\FileActivityFinishedEventArgs.cs" />
     <Compile Include="Args\FilesFinishedChangingEventArgs.cs" />
     <Compile Include="Args\FileChangedEventArgs.cs" />
@@ -57,6 +60,9 @@
     <Compile Include="Factory\IEnhancedFileSystemWatcherFactory.cs" />
     <Compile Include="FileChangingItem.cs" />
     <Compile Include="FileEventItem.cs" />
+    <Compile Include="Handler\DirectoryDeletedEventHandler.cs" />
+    <Compile Include="Handler\DirectoryRenamedEventHandler.cs" />
+    <Compile Include="Handler\DirectoryCreatedEventHandler.cs" />
     <Compile Include="Handler\FileActivityFinishedEventHandler.cs" />
     <Compile Include="Handler\FilesFinishedChangingEventHandler.cs" />
     <Compile Include="Handler\FileChangedEventHandler.cs" />

@@ -17,21 +17,57 @@ namespace FileWatcher.Demo
             }
 
             Console.WriteLine("Press any key to exit");
-            Console.WriteLine("Try copying one file into watched folder");
+            Console.WriteLine(string.Format("Try copying one file into watched folder ({0})", watchedFolder.FullName));
             Console.WriteLine("Try copying a batch of files into a watched folder");
 
-            var fileWatcher = EnhancedFileSystemWatcherFactory.Instance.CreateEnhancedFileSystemWatcher(watchedFolder.FullName, "", 10000, true);
+            var fileWatcher = EnhancedFileSystemWatcherFactory.Instance.CreateEnhancedFileSystemWatcher(watchedFolder.FullName, "", 1000, true);
             fileWatcher.Start();
-            //fileWatcher.FileCreatedEvent += OnFileCreatedEvent;
-            //fileWatcher.FileChangedEvent += OnFileChangedEvent;
+
+            fileWatcher.DirectoryCreatedEvent += OnFileWatcherDirectoryCreatedEvent;
+            fileWatcher.DirectoryDeletedEvent += OnFileWatcherDirectoryDeletedEvent;
+            fileWatcher.DirectoryRenamedEvent += OnFileWatcherDirectoryRenamedEvent;
+
+            fileWatcher.FileCreatedEvent += OnFileCreatedEvent;
+            fileWatcher.FileChangedEvent += OnFileChangedEvent;
             fileWatcher.FileFinishedChangingEvent += OnFileFinishedChangingEvent;
-            //fileWatcher.FileRenamedEvent += OnFileRenamedEvent;
-            //fileWatcher.FileDeletedEvent += OnFileDeletedEvent;
+            fileWatcher.FileRenamedEvent += OnFileRenamedEvent;
+            fileWatcher.FileDeletedEvent += OnFileDeletedEvent;
             fileWatcher.FilesFinishedChangingEvent += OnFilesFinishedChangingEvent;
             fileWatcher.FileActivityFinishedEvent += OnFileActivityFinishedEvent;
 
             Console.ReadKey();
             fileWatcher.Stop();
+        }
+
+        static void OnFileWatcherDirectoryRenamedEvent(object sender, DirectoryRenamedEventArgs e)
+        {
+            lock (Lock)
+            {
+                Console.WriteLine("OnDirectoryRenamedEvent:");
+                Console.WriteLine("  OldFilePath = {0}", e.OldFilePath);
+                Console.WriteLine("  NewFilePath = {0}", e.NewFilePath);
+                Console.WriteLine();
+            }
+        }
+
+        static void OnFileWatcherDirectoryDeletedEvent(object sender, DirectoryDeletedEventArgs e)
+        {
+            lock (Lock)
+            {
+                Console.WriteLine("OnDirectoryDeletedEvent:");
+                Console.WriteLine("  FilePath = {0}", e.FilePath);
+                Console.WriteLine();
+            }
+        }
+
+        static void OnFileWatcherDirectoryCreatedEvent(object sender, DirectoryCreatedEventArgs e)
+        {
+            lock (Lock)
+            {
+                Console.WriteLine("OnDirectoryCreatedEvent:");
+                Console.WriteLine("  FilePath = {0}", e.FilePath);
+                Console.WriteLine();
+            }
         }
 
         static void OnFileDeletedEvent(object sender, FileDeletedEventArgs e)

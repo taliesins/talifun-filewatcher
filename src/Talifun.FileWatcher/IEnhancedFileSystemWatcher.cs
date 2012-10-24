@@ -92,6 +92,23 @@ namespace Talifun.FileWatcher
         /// </summary>
         event FileRenamedEventHandler FileRenamedEvent;
 
+
+        /// <summary>
+        /// This event occurs when a directory is created.
+        /// </summary>
+        event DirectoryCreatedEventHandler DirectoryCreatedEvent;
+
+        /// <summary>
+        /// This event occurs when a directory is deleted.
+        /// </summary>
+        event DirectoryDeletedEventHandler DirectoryDeletedEvent;
+
+        /// <summary>
+        /// This event occures when a directory is renamed.
+        /// </summary>
+        event DirectoryRenamedEventHandler DirectoryRenamedEvent;
+
+
         /// <summary>
         /// This event is raised when a few changes to a file have finished taking place. The polltime
         /// specifies how long to wait without activity before assuming that file changes are complete.

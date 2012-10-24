@@ -59,7 +59,7 @@ namespace Talifun.FileWatcher
     		{
     		    IncludeSubdirectories = IncludeSubdirectories,
     		    EnableRaisingEvents = false,
-    		    NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite 
     		};
     		_fileSystemWatcher.Changed += _fileSystemWatcherChangedEvent;
             _fileSystemWatcher.Created += _fileSystemWatcherCreatedEvent;
@@ -367,7 +367,7 @@ namespace Talifun.FileWatcher
                 var filePath = e.FilePath;
                 if (_filesChanging.ContainsKey(filePath))
                 {
-                    if (IsFileLocked(filePath))
+                    if ( IsFileLocked(filePath))
                     {
                         //The file is still currently in use, lets try raise the event later
                         Touch(filePath);
@@ -403,6 +403,15 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
+            var isDirectory = (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+
+            if (isDirectory)
+            {
+                var directoryCreatedEventArgs = new DirectoryCreatedEventArgs(e.FullPath, UserState);
+                RaiseAsynchronousOnDirectoryCreatedEvent(directoryCreatedEventArgs);
+                return;
+            }
+
 			if (!ShouldMonitorFile(filePath)) return;
             if (e.ChangeType != WatcherChangeTypes.Created) return;
             lock (_filesRaisingEventsLock)
@@ -426,6 +435,13 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
+            var isDirectory = (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+
+            if (isDirectory)
+            {
+                return;
+            }
+
 			if (!ShouldMonitorFile(filePath)) return;
 
             lock (_filesRaisingEventsLock)
@@ -448,6 +464,17 @@ namespace Talifun.FileWatcher
         private void OnFileDeleted(object sender, FileSystemEventArgs e)
         {
             var filePath = e.FullPath;
+
+            //There is no good way of detecting files without extensions and directories with full stopes in name. The file/directory has been deleted so we can't find it out from the path.
+            var isDirectory = Path.GetExtension(filePath) == string.Empty;
+
+            if (isDirectory)
+            {
+                var directoryDeletedEventArgs = new DirectoryDeletedEventArgs(e.FullPath, UserState);
+                RaiseAsynchronousOnDirectoryDeletedEvent(directoryDeletedEventArgs);
+                return;
+            }
+
 			if (!ShouldMonitorFile(filePath)) return;
 
             lock (_filesRaisingEventsLock)
@@ -468,6 +495,16 @@ namespace Talifun.FileWatcher
         private void OnFileRenamed(object sender, RenamedEventArgs e)
         {
             var filePath = e.FullPath;
+
+            var isDirectory = (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+
+            if (isDirectory)
+            {
+                var directoryRenamedEventArgs = new DirectoryRenamedEventArgs(e.OldFullPath, e.FullPath, UserState);
+                RaiseAsynchronousOnDirectoryRenamedEvent(directoryRenamedEventArgs);
+                return;
+            }
+
 			if (!ShouldMonitorFile(filePath)) return;
 
             lock (_filesRaisingEventsLock)
@@ -486,6 +523,7 @@ namespace Talifun.FileWatcher
         }
 
         #endregion
+
 
         #region FileChangedEvent
         /// <summary>
@@ -958,6 +996,362 @@ namespace Talifun.FileWatcher
             }
         }
         #endregion
+
+
+        #region DirectoryCreatedEvent
+        /// <summary>
+        /// Where the actual event is stored.
+        /// </summary>
+        private DirectoryCreatedEventHandler _directoryCreatedEvent;
+
+        /// <summary>
+        /// Lock for event delegate access.
+        /// </summary>
+        private readonly object _directoryCreatedEventLock = new object();
+
+        /// <summary>
+        /// The event that is fired.
+        /// </summary>
+        public event DirectoryCreatedEventHandler DirectoryCreatedEvent
+        {
+            add
+            {
+                if (!Monitor.TryEnter(_directoryCreatedEventLock, _lockTimeout))
+                {
+                    throw new ApplicationException("Timeout waiting for lock - DirectoryCreatedEvent.add");
+                }
+                try
+                {
+                    _directoryCreatedEvent += value;
+                }
+                finally
+                {
+                    Monitor.Exit(_directoryCreatedEventLock);
+                }
+            }
+            remove
+            {
+                if (!Monitor.TryEnter(_directoryCreatedEventLock, _lockTimeout))
+                {
+                    throw new ApplicationException("Timeout waiting for lock - DirectoryCreatedEvent.remove");
+                }
+                try
+                {
+                    _directoryCreatedEvent -= value;
+                }
+                finally
+                {
+                    Monitor.Exit(_directoryCreatedEventLock);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Template method to add default behaviour for the event
+        /// </summary>
+        private void OnDirectoryCreatedEvent(DirectoryCreatedEventArgs e)
+        {
+            // TODO: Implement default behaviour of OnDirectoryCreatedEvent
+        }
+
+        private void AsynchronousOnDirectoryCreatedEventRaised(object state)
+        {
+            var e = state as DirectoryCreatedEventArgs;
+            RaiseOnDirectoryCreatedEvent(e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the calling thread synchronously. 
+        /// i.e. it will wait until all event handlers have processed the event.
+        /// </summary>
+        /// <param name="state">The state to be passed to the event.</param>
+        private void RaiseCrossThreadOnDirectoryCreatedEvent(DirectoryCreatedEventArgs e)
+        {
+            _asyncOperation.SynchronizationContext.Send(new SendOrPostCallback(AsynchronousOnDirectoryCreatedEventRaised), e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the calling thread asynchronously. 
+        /// i.e. it will immediatly continue processing even though event 
+        /// handlers have not processed the event yet.
+        /// </summary>
+        /// <param name="state">The state to be passed to the event.</param>
+        private void RaiseAsynchronousOnDirectoryCreatedEvent(DirectoryCreatedEventArgs e)
+        {
+            _asyncOperation.Post(new SendOrPostCallback(AsynchronousOnDirectoryCreatedEventRaised), e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the current thread synchronously.
+        /// i.e. it will wait until all event handlers have processed the event.
+        /// </summary>
+        /// <param name="e">The state to be passed to the event.</param>
+        private void RaiseOnDirectoryCreatedEvent(DirectoryCreatedEventArgs e)
+        {
+            // Make a temporary copy of the event to avoid possibility of
+            // a race condition if the last subscriber unsubscribes
+            // immediately after the null check and before the event is raised.
+
+            DirectoryCreatedEventHandler eventHandler;
+
+            if (!Monitor.TryEnter(_directoryCreatedEventLock, _lockTimeout))
+            {
+                throw new ApplicationException("Timeout waiting for lock - RaiseOnDirectoryCreatedEvent");
+            }
+            try
+            {
+                eventHandler = _directoryCreatedEvent;
+            }
+            finally
+            {
+                Monitor.Exit(_directoryCreatedEventLock);
+            }
+
+            OnDirectoryCreatedEvent(e);
+
+            if (eventHandler != null)
+            {
+                eventHandler(this, e);
+            }
+        }
+        #endregion
+
+        #region DirectoryDeletedEvent
+        /// <summary>
+        /// Where the actual event is stored.
+        /// </summary>
+        private DirectoryDeletedEventHandler _directoryDeletedEvent;
+
+        /// <summary>
+        /// Lock for event delegate access.
+        /// </summary>
+        private readonly object _directoryDeletedEventLock = new object();
+
+        /// <summary>
+        /// The event that is fired.
+        /// </summary>
+        public event DirectoryDeletedEventHandler DirectoryDeletedEvent
+        {
+            add
+            {
+                if (!Monitor.TryEnter(_directoryDeletedEventLock, _lockTimeout))
+                {
+                    throw new ApplicationException("Timeout waiting for lock - DirectoryDeletedEvent.add");
+                }
+                try
+                {
+                    _directoryDeletedEvent += value;
+                }
+                finally
+                {
+                    Monitor.Exit(_directoryDeletedEventLock);
+                }
+            }
+            remove
+            {
+                if (!Monitor.TryEnter(_directoryDeletedEventLock, _lockTimeout))
+                {
+                    throw new ApplicationException("Timeout waiting for lock - DirectoryDeletedEvent.remove");
+                }
+                try
+                {
+                    _directoryDeletedEvent -= value;
+                }
+                finally
+                {
+                    Monitor.Exit(_directoryDeletedEventLock);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Template method to add default behaviour for the event
+        /// </summary>
+        private void OnDirectoryDeletedEvent(DirectoryDeletedEventArgs e)
+        {
+            // TODO: Implement default behaviour of OnDirectoryDeletedEvent
+        }
+
+        private void AsynchronousOnDirectoryDeletedEventRaised(object state)
+        {
+            var e = state as DirectoryDeletedEventArgs;
+            RaiseOnDirectoryDeletedEvent(e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the calling thread synchronously. 
+        /// i.e. it will wait until all event handlers have processed the event.
+        /// </summary>
+        /// <param name="state">The state to be passed to the event.</param>
+        private void RaiseCrossThreadOnDirectoryDeletedEvent(DirectoryDeletedEventArgs e)
+        {
+            _asyncOperation.SynchronizationContext.Send(new SendOrPostCallback(AsynchronousOnDirectoryDeletedEventRaised), e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the calling thread asynchronously. 
+        /// i.e. it will immediatly continue processing even though event 
+        /// handlers have not processed the event yet.
+        /// </summary>
+        /// <param name="state">The state to be passed to the event.</param>
+        private void RaiseAsynchronousOnDirectoryDeletedEvent(DirectoryDeletedEventArgs e)
+        {
+            _asyncOperation.Post(new SendOrPostCallback(AsynchronousOnDirectoryDeletedEventRaised), e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the current thread synchronously.
+        /// i.e. it will wait until all event handlers have processed the event.
+        /// </summary>
+        /// <param name="e">The state to be passed to the event.</param>
+        private void RaiseOnDirectoryDeletedEvent(DirectoryDeletedEventArgs e)
+        {
+            // Make a temporary copy of the event to avoid possibility of
+            // a race condition if the last subscriber unsubscribes
+            // immediately after the null check and before the event is raised.
+
+            DirectoryDeletedEventHandler eventHandler;
+
+            if (!Monitor.TryEnter(_directoryDeletedEventLock, _lockTimeout))
+            {
+                throw new ApplicationException("Timeout waiting for lock - RaiseOnDirectoryDeletedEvent");
+            }
+            try
+            {
+                eventHandler = _directoryDeletedEvent;
+            }
+            finally
+            {
+                Monitor.Exit(_directoryDeletedEventLock);
+            }
+
+            OnDirectoryDeletedEvent(e);
+
+            if (eventHandler != null)
+            {
+                eventHandler(this, e);
+            }
+        }
+        #endregion
+
+        #region DirectoryRenamedEvent
+        /// <summary>
+        /// Where the actual event is stored.
+        /// </summary>
+        private DirectoryRenamedEventHandler _directoryRenamedEvent;
+
+        /// <summary>
+        /// Lock for event delegate access.
+        /// </summary>
+        private readonly object _directoryRenamedEventLock = new object();
+
+        /// <summary>
+        /// The event that is fired.
+        /// </summary>
+        public event DirectoryRenamedEventHandler DirectoryRenamedEvent
+        {
+            add
+            {
+                if (!Monitor.TryEnter(_directoryRenamedEventLock, _lockTimeout))
+                {
+                    throw new ApplicationException("Timeout waiting for lock - DirectoryRenamedEvent.add");
+                }
+                try
+                {
+                    _directoryRenamedEvent += value;
+                }
+                finally
+                {
+                    Monitor.Exit(_directoryRenamedEventLock);
+                }
+            }
+            remove
+            {
+                if (!Monitor.TryEnter(_directoryRenamedEventLock, _lockTimeout))
+                {
+                    throw new ApplicationException("Timeout waiting for lock - DirectoryRenamedEvent.remove");
+                }
+                try
+                {
+                    _directoryRenamedEvent -= value;
+                }
+                finally
+                {
+                    Monitor.Exit(_directoryRenamedEventLock);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Template method to add default behaviour for the event
+        /// </summary>
+        private void OnDirectoryRenamedEvent(DirectoryRenamedEventArgs e)
+        {
+            // TODO: Implement default behaviour of OnDirectoryRenamedEvent
+        }
+
+        private void AsynchronousOnDirectoryRenamedEventRaised(object state)
+        {
+            var e = state as DirectoryRenamedEventArgs;
+            RaiseOnDirectoryRenamedEvent(e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the calling thread synchronously. 
+        /// i.e. it will wait until all event handlers have processed the event.
+        /// </summary>
+        /// <param name="state">The state to be passed to the event.</param>
+        private void RaiseCrossThreadOnDirectoryRenamedEvent(DirectoryRenamedEventArgs e)
+        {
+            _asyncOperation.SynchronizationContext.Send(new SendOrPostCallback(AsynchronousOnDirectoryRenamedEventRaised), e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the calling thread asynchronously. 
+        /// i.e. it will immediatly continue processing even though event 
+        /// handlers have not processed the event yet.
+        /// </summary>
+        /// <param name="state">The state to be passed to the event.</param>
+        private void RaiseAsynchronousOnDirectoryRenamedEvent(DirectoryRenamedEventArgs e)
+        {
+            _asyncOperation.Post(new SendOrPostCallback(AsynchronousOnDirectoryRenamedEventRaised), e);
+        }
+
+        /// <summary>
+        /// Will raise the event on the current thread synchronously.
+        /// i.e. it will wait until all event handlers have processed the event.
+        /// </summary>
+        /// <param name="e">The state to be passed to the event.</param>
+        private void RaiseOnDirectoryRenamedEvent(DirectoryRenamedEventArgs e)
+        {
+            // Make a temporary copy of the event to avoid possibility of
+            // a race condition if the last subscriber unsubscribes
+            // immediately after the null check and before the event is raised.
+
+            DirectoryRenamedEventHandler eventHandler;
+
+            if (!Monitor.TryEnter(_directoryRenamedEventLock, _lockTimeout))
+            {
+                throw new ApplicationException("Timeout waiting for lock - RaiseOnDirectoryRenamedEvent");
+            }
+            try
+            {
+                eventHandler = _directoryRenamedEvent;
+            }
+            finally
+            {
+                Monitor.Exit(_directoryRenamedEventLock);
+            }
+
+            OnDirectoryRenamedEvent(e);
+
+            if (eventHandler != null)
+            {
+                eventHandler(this, e);
+            }
+        }
+        #endregion
+
 
         #region FileFinishedChangingEvent
         /// <summary>
