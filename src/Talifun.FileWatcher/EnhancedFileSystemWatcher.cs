@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.ComponentModel;
+using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Timers;
@@ -435,7 +436,7 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
-            var isDirectory = (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+            var isDirectory = Directory.Exists(filePath) & (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
 
             if (isDirectory)
             {
@@ -465,11 +466,20 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
-            //There is no good way of detecting files without extensions and directories with full stopes in name. The file/directory has been deleted so we can't find it out from the path.
+            //There is no good way of detecting files without extensions and directories with full stops in name. The file/directory has been deleted so we can't find it out from the path.
             var isDirectory = Path.GetExtension(filePath) == string.Empty;
 
             if (isDirectory)
             {
+                lock (_filesRaisingEventsLock)
+                {
+                    var filesInDirectory = _filesChanging.Keys.Where(x => x.StartsWith(e.FullPath + "/"));
+
+                    foreach (var fileInDirectory in filesInDirectory)
+                    {
+                        Pop(fileInDirectory);
+                    }
+                }
                 var directoryDeletedEventArgs = new DirectoryDeletedEventArgs(e.FullPath, UserState);
                 RaiseAsynchronousOnDirectoryDeletedEvent(directoryDeletedEventArgs);
                 return;
@@ -496,10 +506,24 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
-            var isDirectory = (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+            var isDirectory = Directory.Exists(filePath) & (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
 
             if (isDirectory)
             {
+                lock (_filesRaisingEventsLock)
+                {
+                    var filesInDirectory = _filesChanging.Keys.Where(x => x.StartsWith(e.OldFullPath + "/"));
+
+                    foreach (var fileInDirectory in filesInDirectory)
+                    {
+                        var fileInDirectoryPath = _filesChanging[fileInDirectory].FilePath;
+                        Pop(fileInDirectory);
+
+                        var fileFinishedChangingEventArgs = new FileFinishedChangingEventArgs(fileInDirectoryPath, FileEventType.Renamed, UserState);
+                        RaiseAsynchronousOnFileFinishedChangingEvent(fileFinishedChangingEventArgs);
+                    }
+                }
+
                 var directoryRenamedEventArgs = new DirectoryRenamedEventArgs(e.OldFullPath, e.FullPath, UserState);
                 RaiseAsynchronousOnDirectoryRenamedEvent(directoryRenamedEventArgs);
                 return;
