@@ -10,4 +10,6 @@
 
 properties {
   Write-Output "Loading override settings"
+
+  $solution.name = "Talifun-FileWatcher"
 }
