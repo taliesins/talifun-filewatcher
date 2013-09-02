@@ -12,4 +12,5 @@ properties {
   Write-Output "Loading override settings"
 
   $solution.name = "Talifun-FileWatcher"
+  $solution.file = "$($base.dir)\$($solution.name).sln"
 }
