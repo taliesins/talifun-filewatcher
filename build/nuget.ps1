@@ -16,16 +16,17 @@ properties {
   
   # add either the project_name or nuspec file to use when packaging.
   $nuget.options = ""
-  $nuget.targets = @((Get-ChildItem -path "$($base.dir)\*" -recurse -include *.nuspec) |  Where-Object {$_.FullName -notlike "$($base.dir)\packages\*" -and $_.FullName -notlike "$($base.dir)\build\*" -and $_.FullName -notlike "$($base.dir)\src\Examples\*"} | Select-Object $_.FullName)
+  $ignoreExpression = ($base.dir -replace "\\", "\\") + "\\(bin|build|release|packages|tools|src\\examples)\\.*"
+  $nuget.targets =  @((Get-ChildItem -path "$($base.dir)\*" -recurse -include *.nuspec) |  Where-Object {$_.FullName -notmatch $ignoreExpression} | Select-Object $_.FullName)
 
   if ($nuget.targets.length -lt 1 ){
     if(!(Test-Path("$($source.dir)\$($solution.name)\$($solution.name).csproj"))) {  
-		Write-Output "Could not find $($source.dir)\$($solution.name)\$($solution.name).csproj" 
-		$nuget.targets = @()
-	} else {
-		$nuget.targets = @("$($source.dir)\$($solution.name)\$($solution.name).csproj")
-		$nuget.options = "-Build -Sym -Properties Configuration=$($build.configuration)"
-	}
+  		Write-Output "Could not find $($source.dir)\$($solution.name)\$($solution.name).csproj" 
+  		$nuget.targets = @()
+  	} else {
+  		$nuget.targets = @("$($source.dir)\$($solution.name)\$($solution.name).csproj")
+  		$nuget.options = "-Build -Sym -Properties Configuration=$($build.configuration)"
+  	}
   }
 }
 
