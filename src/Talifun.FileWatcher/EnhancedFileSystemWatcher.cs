@@ -404,7 +404,17 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
-            var isDirectory = Directory.Exists(filePath) && (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+            var isDirectory = false;
+
+            try
+            {
+                isDirectory = Directory.Exists(filePath) && (File.GetAttributes(filePath) & FileAttributes.Directory) ==
+                              FileAttributes.Directory;
+            }
+            catch
+            {
+                // ignored
+            }
 
             if (isDirectory)
             {
@@ -437,7 +447,16 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
-            var isDirectory = Directory.Exists(filePath) && (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+            var isDirectory = false;
+
+            try
+            {
+                isDirectory = Directory.Exists(filePath) && (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+            }
+            catch
+            {
+                // ignored
+            }
 
             if (isDirectory)
             {
@@ -507,7 +526,16 @@ namespace Talifun.FileWatcher
         {
             var filePath = e.FullPath;
 
-            var isDirectory = Directory.Exists(filePath) && (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+            var isDirectory = false;
+
+            try
+            {
+                isDirectory = Directory.Exists(filePath) && (File.GetAttributes(filePath) & FileAttributes.Directory) == FileAttributes.Directory;
+            }
+            catch
+            {
+                // ignored
+            }
 
             if (isDirectory)
             {
